@@ -32,9 +32,14 @@ import { createMLDSA44, createMLDSA65, createMLDSA87 } from "@oqs/liboqs-js/sig"
 
 /*** UTILITY ------------------------------------------ ***/
 
-const ED25519_SIG_LENGTH = 64; /*** Ed25519 signatures are always 64 bytes.  ***/
-const ED25519_PK_LENGTH = 32;  /*** Ed25519 public keys are always 32 bytes. ***/
-const ED25519_SK_LENGTH = 32;  /*** Ed25519 secret keys are always 32 bytes. ***/
+/** Fixed byte length of an Ed25519 signature (RFC 8032, §5.1.6). */
+const ED25519_SIG_LENGTH = 64;
+
+/** Fixed byte length of an Ed25519 public key (RFC 8032, §5.1.5). */
+const ED25519_PK_LENGTH = 32;
+
+/** Fixed byte length of an Ed25519 secret key seed (RFC 8032, §5.1.5). */
+const ED25519_SK_LENGTH = 32;
 
 /**
  * Byte length of the uint32 big-endian length prefix stored at the start of
@@ -76,23 +81,49 @@ export const KEY_SIZES: Record<MlDsaVariant, { ed25519SecretKey: number; ed25519
   }
 };
 
+/**
+ * Supported ML-DSA parameter sets (FIPS 204).
+ * Higher numbers mean larger keys/signatures and stronger security margins:
+ *   - ML-DSA-44 → NIST security level 2 (≈AES-128)
+ *   - ML-DSA-65 → NIST security level 3 (≈AES-192) — recommended default
+ *   - ML-DSA-87 → NIST security level 5 (≈AES-256)
+ */
 export type MlDsaVariant = "ML-DSA-44" | "ML-DSA-65" | "ML-DSA-87";
 
+/**
+ * Hybrid algorithm identifiers placed in the JWT `alg` header.
+ * Each variant pairs an ML-DSA parameter set with Ed25519 for
+ * classical + post-quantum defence-in-depth.
+ */
 export type HybridVariant =
   | "ML-DSA-44+Ed25519"
   | "ML-DSA-65+Ed25519"
   | "ML-DSA-87+Ed25519";
 
+/**
+ * Union of every algorithm identifier this module may place in the
+ * JWT `alg` header — ML-DSA only or hybrid ML-DSA + Ed25519.
+ */
 export type Algorithm = MlDsaVariant | HybridVariant;
 
+/**
+ * JOSE header emitted for every token produced by this module.
+ * `typ` is always `"JWT"`; `alg` identifies the signing scheme.
+ */
 export interface JwtHeader {
   alg: Algorithm;
   typ: "JWT";
 }
 
+/**
+ * ML-DSA-only keypair returned by {@link generateKeyPair}.
+ * Store `secretKey` securely; `publicKey` is safe to distribute.
+ */
 export interface KeyPair {
-  publicKey: string; /*** Base64url-encoded ML-DSA public key ***/
-  secretKey: string; /*** Base64url-encoded ML-DSA secret key ***/
+  /** Base64url-encoded ML-DSA public key. */
+  publicKey: string;
+  /** Base64url-encoded ML-DSA secret key. */
+  secretKey: string;
 }
 
 /**
@@ -100,58 +131,125 @@ export interface KeyPair {
  * Store all secret keys securely. Distribute all public keys to verifiers.
  */
 export interface HybridKeyPair {
-  /***Base64url-encoded ***/
+  /** Ed25519 keypair, both values Base64url-encoded. */
   ed25519: {
+    /** Base64url-encoded Ed25519 public key (32 bytes raw). */
     publicKey: string;
+    /** Base64url-encoded Ed25519 secret key seed (32 bytes raw). */
     secretKey: string;
   };
-  /***Base64url-encoded ***/
+  /** ML-DSA keypair, both values Base64url-encoded. */
   mlDsa: {
+    /** Base64url-encoded ML-DSA public key. */
     publicKey: string;
+    /** Base64url-encoded ML-DSA secret key. */
     secretKey: string;
   };
+  /** ML-DSA parameter set this keypair was generated for. */
   variant: MlDsaVariant;
 }
 
+/**
+ * Public half of a {@link HybridKeyPair}, suitable for distribution
+ * to verifiers. Both keys are required to verify a hybrid token.
+ */
 export interface HybridPublicKeys {
-  ed25519PublicKey: string; /***Base64url-encoded ***/
-  mlDsaPublicKey: string;   /***Base64url-encoded ***/
+  /** Base64url-encoded Ed25519 public key. */
+  ed25519PublicKey: string;
+  /** Base64url-encoded ML-DSA public key. */
+  mlDsaPublicKey: string;
 }
 
+/**
+ * Decoded JWT claims set. Standard registered claims (`exp`, `iat`,
+ * `iss`, `sub`) are typed explicitly; arbitrary additional claims
+ * are permitted via the index signature.
+ */
 export interface JwtPayload {
   [key: string]: unknown;
-  exp?: number; /*** Unix timestamp (seconds) ***/
-  iat?: number; /*** Unix timestamp (seconds) ***/
+  /** Expiration time as a Unix timestamp in seconds (RFC 7519 §4.1.4). */
+  exp?: number;
+  /** Issued-at time as a Unix timestamp in seconds (RFC 7519 §4.1.6). */
+  iat?: number;
+  /** Issuer claim (RFC 7519 §4.1.1). */
   iss?: string;
+  /** Subject claim (RFC 7519 §4.1.2). */
   sub?: string;
 }
 
+/**
+ * Options accepted by {@link sign} when producing an ML-DSA-only token.
+ */
 export interface SignOptions {
+  /** ML-DSA parameter set to use. Defaults to `"ML-DSA-65"`. */
   algorithm?: MlDsaVariant;
-  expiresIn?: number; /*** seconds from now ***/
+  /** Lifetime in seconds from now. If set, adds an `exp` claim. */
+  expiresIn?: number;
+  /** Value for the `iss` claim, if any. */
   issuer?: string;
+  /** Value for the `sub` claim, if any. */
   subject?: string;
 }
 
+/**
+ * Options accepted by {@link hybridSign} when producing a hybrid
+ * ML-DSA + Ed25519 token.
+ */
 export interface HybridSignOptions {
-  expiresIn?: number; /*** seconds from now ***/
+  /** Lifetime in seconds from now. If set, adds an `exp` claim. */
+  expiresIn?: number;
+  /** Value for the `iss` claim, if any. */
   issuer?: string;
+  /** Value for the `sub` claim, if any. */
   subject?: string;
+  /**
+   * Override the ML-DSA parameter set. Defaults to the `variant`
+   * stored on the supplied {@link HybridKeyPair}.
+   */
   variant?: MlDsaVariant;
 }
 
+/**
+ * Options accepted by {@link verify} when validating an ML-DSA-only token.
+ */
 export interface VerifyOptions {
+  /** Expected ML-DSA parameter set. Defaults to `"ML-DSA-65"`. */
   algorithm?: MlDsaVariant;
+  /** Require the `iss` claim to equal this value. */
   issuer?: string;
+  /** Require the `sub` claim to equal this value. */
   subject?: string;
 }
 
+/**
+ * Options accepted by {@link hybridVerify} when validating a hybrid
+ * ML-DSA + Ed25519 token.
+ */
 export interface HybridVerifyOptions {
+  /** Require the `iss` claim to equal this value. */
   issuer?: string;
+  /** Require the `sub` claim to equal this value. */
   subject?: string;
+  /** Expected ML-DSA parameter set. Defaults to `"ML-DSA-65"`. */
   variant?: MlDsaVariant;
 }
 
+/**
+ * Error raised for any failure during signing, decoding, or verification.
+ * The `code` field carries a stable machine-readable identifier so callers
+ * can branch on failure modes without parsing error messages.
+ *
+ * Known codes:
+ *   - `ERR_MALFORMED`          — token structure or encoding is invalid
+ *   - `ERR_TYPE`               — header `typ` is not `"JWT"`
+ *   - `ERR_ALGORITHM`          — header `alg` does not match expectations
+ *   - `ERR_SIGNATURE`          — ML-DSA-only signature check failed
+ *   - `ERR_SIGNATURE_MLDSA`    — hybrid ML-DSA signature check failed
+ *   - `ERR_SIGNATURE_ED25519`  — hybrid Ed25519 signature check failed
+ *   - `ERR_EXPIRED`            — `exp` claim is in the past
+ *   - `ERR_ISSUER`             — `iss` claim did not match the expected issuer
+ *   - `ERR_SUBJECT`            — `sub` claim did not match the expected subject
+ */
 export class JwtError extends Error {
   constructor(message: string, public readonly code: string) {
     super(message);
@@ -401,6 +499,11 @@ export async function verify(token: string, publicKey: string, options: VerifyOp
 
 /*** HELPER ------------------------------------------- ***/
 
+/**
+ * Decode a Base64url string (RFC 4648 §5, no padding) into raw bytes.
+ * Re-pads and translates the URL-safe alphabet back to standard Base64
+ * before delegating to {@link atob}.
+ */
 function base64urlDecode(str: string): Uint8Array {
   const padded = str
     .replaceAll("-", "+")
@@ -411,19 +514,37 @@ function base64urlDecode(str: string): Uint8Array {
   return Uint8Array.from(binary, (c) => c.charCodeAt(0));
 }
 
+/**
+ * Decode a Base64url string into a UTF-8 string. Convenience wrapper
+ * around {@link base64urlDecode} used for JSON header/payload segments.
+ */
 function base64urlDecodeString(str: string): string {
   return new TextDecoder().decode(base64urlDecode(str));
 }
 
+/**
+ * Encode raw bytes as a Base64url string (RFC 4648 §5, no padding).
+ */
 function base64urlEncode(bytes: Uint8Array): string {
   const b64 = btoa(String.fromCharCode(...bytes));
   return b64.replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
 }
 
+/**
+ * Encode a UTF-8 string as Base64url. Convenience wrapper around
+ * {@link base64urlEncode} used for JSON header/payload segments.
+ */
 function base64urlEncodeString(str: string): string {
   return base64urlEncode(new TextEncoder().encode(str));
 }
 
+/**
+ * Merge user-supplied claims with standard registered claims.
+ * Always injects `iat` (issued-at) using the current wall clock, and
+ * conditionally adds `exp`, `iss`, and `sub` when the corresponding
+ * options are provided. User-supplied values in `payload` are
+ * overwritten by `iat` but preserved otherwise.
+ */
 function buildClaims(payload: JwtPayload, expiresIn?: number, issuer?: string, subject?: string): JwtPayload {
   const now = Math.floor(Date.now() / 1000);
 
@@ -436,6 +557,10 @@ function buildClaims(payload: JwtPayload, expiresIn?: number, issuer?: string, s
   };
 }
 
+/**
+ * Concatenate any number of `Uint8Array`s into a single buffer.
+ * Used to assemble the hybrid signature blob.
+ */
 function concatBytes(...arrays: Uint8Array[]): Uint8Array {
   const total = arrays.reduce((n, a) => n + a.length, 0);
   const out = new Uint8Array(total);
@@ -449,7 +574,12 @@ function concatBytes(...arrays: Uint8Array[]): Uint8Array {
   return out;
 }
 
-/*** Return an initialised ML-DSA instance for the requested variant. ***/
+/**
+ * Return an initialised ML-DSA instance for the requested variant.
+ * Each call constructs a fresh WebAssembly-backed instance from
+ * `@oqs/liboqs-js`; callers are expected to obtain and discard these
+ * per operation rather than cache them.
+ */
 async function mlDsaFactory(variant: MlDsaVariant): Promise<Awaited<ReturnType<typeof createMLDSA65>>> {
   switch (variant) {
     case "ML-DSA-44": {
@@ -466,6 +596,10 @@ async function mlDsaFactory(variant: MlDsaVariant): Promise<Awaited<ReturnType<t
   }
 }
 
+/**
+ * Decode and JSON-parse the payload segment of a JWT, raising a
+ * {@link JwtError} with code `ERR_MALFORMED` on any failure.
+ */
 function parsePayload(payloadB64: string): JwtPayload {
   try {
     return JSON.parse(base64urlDecodeString(payloadB64));
@@ -474,6 +608,12 @@ function parsePayload(payloadB64: string): JwtPayload {
   }
 }
 
+/**
+ * Enforce registered-claim constraints after a signature has verified.
+ * Checks `exp` against the current time and, when supplied, that
+ * `iss` and `sub` match the expected values. Throws a {@link JwtError}
+ * with an appropriate code on any mismatch.
+ */
 function validateClaims(payload: JwtPayload, issuer?: string, subject?: string): void {
   const now = Math.floor(Date.now() / 1000);
 
