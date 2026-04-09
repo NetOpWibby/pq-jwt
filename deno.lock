@@ -1,0 +1,24 @@
+{
+  "version": "5",
+  "specifiers": {
+    "jsr:@noble/ed25519@^3.0.1": "3.0.1",
+    "npm:@oqs/liboqs-js@~0.15.1": "0.15.1"
+  },
+  "jsr": {
+    "@noble/ed25519@3.0.1": {
+      "integrity": "a347b5fbb73cdefdef2adb5d79d5f62805657304be315de498479d7af51617bc"
+    }
+  },
+  "npm": {
+    "@oqs/liboqs-js@0.15.1": {
+      "integrity": "sha512-nt1M2CuI4JC1FGoLeD0771C/BcisCuJqh8o/54dcUY0nU88Bf7Qv8vF05SA+wLAVf8UTuZD/l6FlS2LI8NjGbg==",
+      "bin": true
+    }
+  },
+  "workspace": {
+    "dependencies": [
+      "jsr:@noble/ed25519@^3.0.1",
+      "npm:@oqs/liboqs-js@~0.15.1"
+    ]
+  }
+}

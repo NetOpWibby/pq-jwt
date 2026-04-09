@@ -1,0 +1,10 @@
+{
+  "exports": "./mod.ts",
+  "imports": {
+    "@noble/ed25519": "jsr:@noble/ed25519@^3.0.1",
+    "@oqs/liboqs-js": "npm:@oqs/liboqs-js@^0.15.1"
+  },
+  "license": "MIT",
+  "name": "@netopwibby/pq-jwt",
+  "version": "0.1.0"
+}
