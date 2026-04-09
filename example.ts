@@ -22,7 +22,7 @@ import {
 console.log("\n/*** ML-DSA only -------------------------------------- ***/\n");
 
 const { publicKey, secretKey } = await generateKeyPair("ML-DSA-65");
-console.log("Public key length (chars):", publicKey.length);
+console.log("Public key length (chars):", publicKey.length, "\n");
 
 const token = await sign(
   {
@@ -37,12 +37,12 @@ const token = await sign(
   }
 );
 
-console.log("Token length (chars):", token.length);
+console.log("Token length (chars):", token.length, "\n");
 
 const { header, payload } = decode(token);
 
-console.log("Header:", header);
-console.log("Payload:", payload);
+console.log("Header:", header, "\n");
+console.log("Payload:", payload, "\n");
 
 try {
   const claims = await verify(token, publicKey, {
@@ -62,8 +62,8 @@ console.log("\n/*** Hybrid ML-DSA-65 + Ed25519 ----------------------- ***/\n");
 
 const hybridKeys = await generateHybridKeyPair("ML-DSA-65");
 
-console.log("ML-DSA public key length (chars):", hybridKeys.mlDsa.publicKey.length);
-console.log("Ed25519 public key length (chars):", hybridKeys.ed25519.publicKey.length);
+console.log("ML-DSA public key length (chars):", hybridKeys.mlDsa.publicKey.length, "\n");
+console.log("Ed25519 public key length (chars):", hybridKeys.ed25519.publicKey.length, "\n");
 
 const hybridToken = await hybridSign(
   {
@@ -77,8 +77,8 @@ const hybridToken = await hybridSign(
   }
 );
 
-console.log("Hybrid token length (chars):", hybridToken.length);
-console.log("Hybrid header:", decode(hybridToken).header);
+console.log("Hybrid token length (chars):", hybridToken.length, "\n");
+console.log("Hybrid header:", decode(hybridToken).header, "\n");
 
 try {
   const claims = await hybridVerify(
@@ -143,8 +143,8 @@ console.log("\n/*** Key sizes (raw bytes) ---------------------------- ***/\n");
 
 for (const [variant, sizes] of Object.entries(KEY_SIZES)) {
   console.log(`${variant}`);
-  console.log("  ML-DSA public key:       ", sizes.mlDsaPublicKey, "bytes");
-  console.log("  ML-DSA secret key:       ", sizes.mlDsaSecretKey, "bytes");
-  console.log("  Ed25519 public key:      ", sizes.ed25519PublicKey, "bytes");
-  console.log("  Ed25519 secret key:      ", sizes.ed25519SecretKey, "bytes");
+  console.log("  ML-DSA public key: ", sizes.mlDsaPublicKey, "bytes");
+  console.log("  ML-DSA secret key: ", sizes.mlDsaSecretKey, "bytes");
+  console.log("  Ed25519 public key:", sizes.ed25519PublicKey, "bytes");
+  console.log("  Ed25519 secret key:", sizes.ed25519SecretKey, "bytes");
 }
